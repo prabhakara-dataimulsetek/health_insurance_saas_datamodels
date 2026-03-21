@@ -2,9 +2,9 @@
 
 ## Overview
 
-This package contains the complete data model, DDL scripts, taxonomy reference data, and ERD diagram for loading and querying the **National Plan & Provider Enumeration System (NPPES)** NPI dataset.
+This package contains the complete data model, DDL scripts, taxonomy reference data, and interactive ERD diagram for loading and querying the **National Plan & Provider Enumeration System (NPPES)** NPI dataset.
 
-The NPPES registry is maintained by CMS and contains over 8 million active healthcare provider records. This data model normalizes the raw flat-file format into a relational schema with full taxonomy mapping to human-readable specialty labels.
+The NPPES registry is maintained by CMS and contains over 8 million active healthcare provider records. This data model normalizes the raw flat-file format into a relational schema with full taxonomy mapping to human-readable specialty labels using the NUCC Health Care Provider Taxonomy code set.
 
 ---
 
@@ -12,11 +12,47 @@ The NPPES registry is maintained by CMS and contains over 8 million active healt
 
 | File | Description |
 |---|---|
-| `nppes_ddl_updated.sql` | **Primary DDL** — full schema with taxonomy lookup, FK constraints, indexes, 4 views |
+| `nppes_ddl_updated.sql` | **Primary DDL** — full schema with `taxonomy_lookup` table (879 codes pre-seeded), FK constraints, indexes, and 4 views |
 | `nppes_ddl_original.sql` | Original DDL without taxonomy mapping (reference only) |
 | `nucc_taxonomy_250.csv` | NUCC Health Care Provider Taxonomy v25.0 — 879 codes (source: nucc.org) |
-| `nppes_erd_diagram.html` | Interactive ERD diagram — open in browser |
+| `nppes_erd_diagram.html` | **Interactive ERD** — open in any browser. Includes draggable entities, zoom, relationship lines, taxonomy explorer panel with all 879 codes searchable, and 4 views |
 | `README.md` | This file |
+
+---
+
+## ERD Diagram — How to Use
+
+Open `nppes_erd_diagram.html` in any browser. No server or internet connection required.
+
+### Features
+
+**Entities**
+
+| Color | Meaning |
+|---|---|
+| Blue | Tables from `npidata_pfile` (core provider data) |
+| Teal/Green | Tables from `pl_pfile`, `othername_pfile`, `endpoint_pfile` |
+| Gold/Amber | `taxonomy_lookup` — NEW table added in updated DDL |
+| Purple dashed | Views — `v_individual_provider`, `v_organization_provider`, `v_provider_search` |
+
+**Interactions**
+- **Drag** any entity card to rearrange the layout
+- **Hover** an entity to highlight its relationship lines
+- **Zoom in/out** using the toolbar buttons
+- **Hide/Show Views** to toggle the 4 view entities
+- **Taxonomy Explorer** panel on the right — searchable panel with all 879 NUCC codes
+
+**Taxonomy Explorer Panel**
+- Search by code (e.g. `207RC`), classification (e.g. `Cardiology`), specialization, or display name
+- All 29 groupings with code counts — click any grouping to expand
+- Click any code row for a detail popup showing all fields
+- Collapse the panel using the ◀ button
+
+**Relationship Lines**
+- Grey lines = standard FK relationships between tables
+- Gold dashed line = new FK from `taxonomy` → `taxonomy_lookup`
+- Purple dashed lines = view → source table relationships
+- Cardinality labels shown on each line (1:1, 1:many, 1:0..*)
 
 ---
 
@@ -29,17 +65,16 @@ The NPPES registry is maintained by CMS and contains over 8 million active healt
 | `othername_pfile` | `other_name` |
 | `endpoint_pfile` | `endpoint` |
 
-Download the latest NPPES data files from:
-**https://download.cms.gov/nppes/NPI_Files.html**
+Download latest NPPES data: **https://download.cms.gov/nppes/NPI_Files.html**
 
 ---
 
 ## NPI Registry API
 
-The CMS NPI Registry API provides real-time provider lookup. No API key required.
+Real-time provider lookup — no API key required.
 
-**Demo / Docs:** https://npiregistry.cms.hhs.gov/demo-api
-**Base URL:** `https://npiregistry.cms.hhs.gov/api/`
+**Demo / Docs:** https://npiregistry.cms.hhs.gov/demo-api  
+**Base URL:** `https://npiregistry.cms.hhs.gov/api/`  
 **Version:** `2.1` (current)
 
 ### Parameters
@@ -79,10 +114,10 @@ GET https://npiregistry.cms.hhs.gov/api/?version=2.1&enumeration_type=NPI-2&taxo
 
 **Search by name:**
 ```
-GET https://npiregistry.cms.hhs.gov/api/?version=2.1&first_name=John&last_name=Smith&state=NY&pretty=true
+GET https://npiregistry.cms.hhs.gov/api/?version=2.1&first_name=John&last_name=Smith*&state=NY&pretty=true
 ```
 
-### Response Structure
+### API Response Structure
 
 ```json
 {
@@ -118,9 +153,7 @@ GET https://npiregistry.cms.hhs.gov/api/?version=2.1&first_name=John&last_name=S
           "state": "CA",
           "license": "A12345"
         }
-      ],
-      "identifiers": [],
-      "endpoints": []
+      ]
     }
   ]
 }
@@ -129,11 +162,11 @@ GET https://npiregistry.cms.hhs.gov/api/?version=2.1&first_name=John&last_name=S
 ### API Notes
 
 - No authentication required — publicly accessible
-- Rate limit: CMS recommends no more than 20 requests/second
+- Rate limit: no more than 20 requests/second recommended
 - Max 200 results per request; use `skip` for pagination
 - Append `*` to name fields for partial/wildcard matching
-- `taxonomies[].desc` in the API = `taxonomy_lookup.display_name` in local schema
-- `basic.status = "A"` means Active
+- `taxonomies[].desc` in API = `taxonomy_lookup.display_name` in local schema
+- `basic.status = "A"` = Active provider
 
 ### Python Helper
 
@@ -155,7 +188,7 @@ def lookup_npi(npi: str) -> dict:
         "npi":           r["number"],
         "name":          f"{r['basic'].get('first_name','')} {r['basic'].get('last_name', r['basic'].get('organization_name',''))}".strip(),
         "credential":    r["basic"].get("credential"),
-        "specialty":     taxonomy.get("desc"),       # human-readable
+        "specialty":     taxonomy.get("desc"),       # human-readable display name
         "taxonomy_code": taxonomy.get("code"),
         "status":        r["basic"].get("status"),   # A=Active
         "city":          location.get("city"),
@@ -181,13 +214,11 @@ def search_providers(taxonomy_desc: str, state: str, limit: int = 50) -> list:
 
 ## NUCC Health Care Provider Taxonomy
 
-The **National Uniform Claim Committee (NUCC)** maintains the taxonomy code set that maps 10-character codes to human-readable specialty labels.
+The **National Uniform Claim Committee (NUCC)** maintains the taxonomy code set mapping 10-character codes to human-readable specialty labels.
 
 **CSV Downloads:** https://www.nucc.org/index.php/code-sets-mainmenu-41/provider-taxonomy-mainmenu-40/csv-mainmenu-57
 
 ### Release Schedule
-
-NUCC releases taxonomy updates **twice per year**:
 
 | Release Type | Effective Date |
 |---|---|
@@ -199,12 +230,12 @@ NUCC releases taxonomy updates **twice per year**:
 | Version | Effective | CSV URL |
 |---|---|---|
 | **v25.1** ← **Latest** | 7/1/2025 & 1/1/2026 | https://www.nucc.org/images/stories/CSV/nucc_taxonomy_251.csv |
-| **v25.0** ← *included* | 1/1/2025 | https://www.nucc.org/images/stories/CSV/nucc_taxonomy_250.csv |
+| **v25.0** ← *included in this package* | 1/1/2025 | https://www.nucc.org/images/stories/CSV/nucc_taxonomy_250.csv |
 | v24.1 | 7/1/2024 | https://www.nucc.org/images/stories/CSV/nucc_taxonomy_241.csv |
 | v24.0 | 1/1/2024 | https://www.nucc.org/images/stories/CSV/nucc_taxonomy_240.csv |
 | v23.1 | 7/1/2023 | https://www.nucc.org/images/stories/CSV/nucc_taxonomy_231.csv |
 
-> **Note:** The `nucc_taxonomy_250.csv` included is v25.0. The current release is **v25.1**. Download the latest before deploying to production.
+> **Note:** `nucc_taxonomy_250.csv` included here is v25.0. The current release is **v25.1** (effective 7/1/2025). Download the latest before deploying to production. All 879 v25.0 codes are pre-seeded into `taxonomy_lookup` by the DDL.
 
 ### CSV Columns
 
@@ -216,15 +247,15 @@ NUCC releases taxonomy updates **twice per year**:
 | `Specialization` | Sub-specialty (blank for base codes) | `Cardiovascular Disease` |
 | `Definition` | Full clinical definition | long text |
 | `Notes` | Source/effective date notes | `[7/1/2007: added]` |
-| `Display Name` | Short human-readable label | `Cardiovascular Disease Physician` |
+| `Display Name` | Short human-readable label ← **used as `display_name`** | `Cardiovascular Disease Physician` |
 | `Section` | `Individual` or `Non-Individual` | `Individual` |
 
 ### v25.0 Coverage
 
-- **879 total codes**
+- **879 total codes** — all pre-seeded in `taxonomy_lookup`
 - **694 Individual** provider types
 - **185 Non-Individual** (hospitals, clinics, labs, agencies)
-- **29 groupings**
+- **29 groupings** — all browsable in the ERD Taxonomy Explorer panel
 - **240 base codes** (no sub-specialization)
 - **639 codes** with sub-specialization
 
@@ -258,9 +289,9 @@ NUCC releases taxonomy updates **twice per year**:
 ## Schema Overview
 
 ```
-taxonomy_lookup          ← NUCC v25.0 reference (879 codes, pre-seeded)
-        ↑ FK
-provider (NPI)           ← Central hub, one row per NPI
+taxonomy_lookup  ← NUCC v25.0 (879 codes, pre-seeded) ← NEW
+       ↑ FK
+provider (NPI)   ← Central hub, one row per NPI
     ├── mailing_address                  1:1
     ├── practice_location                1:1
     ├── secondary_practice_location      1:many
@@ -269,23 +300,29 @@ provider (NPI)           ← Central hub, one row per NPI
     ├── other_name                       1:many
     ├── authorized_official              1:0-or-1 (organizations only)
     └── endpoint                         1:many
+
+Views (join provider + taxonomy + taxonomy_lookup):
+    v_individual_provider
+    v_organization_provider
+    v_provider_all_taxonomies
+    v_provider_search
 ```
 
 ---
 
 ## Table Definitions
 
-### `taxonomy_lookup` (new in updated DDL)
+### `taxonomy_lookup` ← NEW in updated DDL
 
-Pre-seeded with all 879 NUCC v25.0 codes. Maps raw 10-character codes to human-readable labels.
+Pre-seeded with all 879 NUCC v25.0 codes. The key table for human-readable specialty resolution.
 
 | Column | Type | Description |
 |---|---|---|
-| `taxonomy_code` | VARCHAR(10) PK | 10-character NUCC code |
+| `taxonomy_code` | VARCHAR(10) PK | 10-character NUCC code e.g. `207Q00000X` |
 | `grouping` | VARCHAR(100) | Broad category |
 | `classification` | VARCHAR(200) | Specialty |
 | `specialization` | VARCHAR(200) | Sub-specialty (blank for base codes) |
-| `display_name` | VARCHAR(300) | Human-readable label |
+| `display_name` | VARCHAR(300) | **Human-readable label** e.g. `Family Medicine Physician` |
 | `section` | VARCHAR(50) | `Individual` or `Non-Individual` |
 
 ### `provider`
@@ -304,12 +341,12 @@ Central entity — one row per NPI.
 
 ### `taxonomy`
 
-Up to 15 codes per provider. FK to `taxonomy_lookup`.
+Up to 15 codes per provider. **FK to `taxonomy_lookup`** (added in updated DDL).
 
 | Column | Notes |
 |---|---|
 | `taxonomy_code` FK | References `taxonomy_lookup.taxonomy_code` |
-| `primary_switch` | `Y` = primary taxonomy |
+| `primary_switch` | `Y` = primary taxonomy for this provider |
 | `license_number` | State license number |
 | `license_state` | Issuing state |
 
@@ -323,34 +360,32 @@ Up to 15 codes per provider. FK to `taxonomy_lookup`.
 | `other_identifier` | 1:many (up to 50) | Medicare, Medicaid, DEA, state IDs |
 | `other_name` | 1:many | Trade names, DBAs, former names |
 | `authorized_official` | 1:0-or-1 | Organizations only |
-| `endpoint` | 1:many | FHIR, Direct Trust, REST/SOAP |
+| `endpoint` | 1:many | FHIR, Direct Trust, REST/SOAP endpoints |
 
 ---
 
 ## Views
 
-### `v_individual_provider`
-Individuals with practice location and primary taxonomy resolved.
+All 4 views join `provider` + `taxonomy` + `taxonomy_lookup` and expose human-readable specialty fields marked ★.
 
+### `v_individual_provider`
 ```sql
 SELECT npi, last_name, first_name, credential,
-       specialty, specialty_classification, city, state, phone
+       specialty ★, specialty_classification ★, specialty_grouping ★,
+       city, state, postal_code, phone
 FROM v_individual_provider
 WHERE state = 'CA' AND specialty_classification = 'Family Medicine';
 ```
 
 ### `v_organization_provider`
-Organizations with authorized official and primary specialty.
-
 ```sql
-SELECT npi, org_name, specialty, city, state
+SELECT npi, org_name, specialty ★, specialty_grouping ★, city, state
 FROM v_organization_provider
 WHERE specialty_grouping = 'Hospitals';
 ```
 
 ### `v_provider_all_taxonomies`
 All 15 taxonomy slots per provider with human-readable labels.
-
 ```sql
 SELECT DISTINCT npi, provider_name
 FROM v_provider_all_taxonomies
@@ -358,14 +393,13 @@ WHERE specialty_classification = 'Cardiology';
 ```
 
 ### `v_provider_search`
-Optimized for search. Excludes deactivated providers.
-
+Optimized search view. **Excludes deactivated providers** (deactivation_date IS NULL).
 ```sql
-SELECT npi, provider_name, credential, specialty,
+SELECT npi, provider_name, credential,
+       specialty ★, specialty_classification ★, specialty_specialization ★,
        city, state, postal_code, phone
 FROM v_provider_search
-WHERE state = 'TX'
-  AND specialty_classification ILIKE '%cardio%'
+WHERE state = 'TX' AND specialty_classification ILIKE '%cardio%'
 ORDER BY last_name;
 ```
 
@@ -374,10 +408,10 @@ ORDER BY last_name;
 ## Loading NPPES Data
 
 ```bash
-# 1. Create schema
+# 1. Create schema (includes taxonomy_lookup with 879 pre-seeded codes)
 psql -U postgres -d your_database -f nppes_ddl_updated.sql
 
-# 2. Download NPPES (~9GB unzipped)
+# 2. Download NPPES flat files (~9GB unzipped)
 wget https://download.cms.gov/nppes/NPPES_Data_Dissemination_MMDDYYYY.zip
 unzip NPPES_Data_Dissemination_*.zip
 
@@ -390,13 +424,15 @@ psql -U postgres -d your_database << 'SQL'
   FROM 'endpoint_pfile_YYYYMMDD.csv' CSV HEADER;
 SQL
 
-# 4. Verify taxonomy mapping (should be 0)
+# 4. Verify taxonomy FK coverage (should be 0 unresolved)
 psql -U postgres -d your_database -c "
 SELECT COUNT(*) AS unresolved
 FROM taxonomy t
 LEFT JOIN taxonomy_lookup tl ON t.taxonomy_code = tl.taxonomy_code
 WHERE t.taxonomy_code IS NOT NULL AND tl.taxonomy_code IS NULL;"
 ```
+
+> **ETL Note:** The raw NPPES file has repeating column groups (Taxonomy_1–_15, Other_Identifier_1–_50). An ETL step is required to normalize these into the `taxonomy` and `other_identifier` tables.
 
 ---
 
@@ -408,7 +444,7 @@ NUCC releases updates every 6 months. Current latest: **v25.1** (effective 7/1/2
 # Download latest
 wget https://www.nucc.org/images/stories/CSV/nucc_taxonomy_251.csv
 
-# Upsert
+# Upsert into taxonomy_lookup
 psql -U postgres -d your_database << 'SQL'
 CREATE TEMP TABLE taxonomy_import (LIKE taxonomy_lookup);
 \COPY taxonomy_import FROM 'nucc_taxonomy_251.csv' CSV HEADER;
@@ -456,7 +492,24 @@ WHERE t.primary_switch = 'Y'
 GROUP BY tl.display_name
 ORDER BY provider_count DESC
 LIMIT 20;
+
+-- Taxonomy code lookup
+SELECT taxonomy_code, grouping, classification, specialization, display_name
+FROM taxonomy_lookup
+WHERE classification ILIKE '%family%'
+ORDER BY taxonomy_code;
 ```
+
+---
+
+## What Changed vs Original DDL
+
+| Feature | Original DDL | Updated DDL |
+|---|---|---|
+| Taxonomy codes | Raw codes only (`207Q00000X`) | FK to `taxonomy_lookup` → human-readable labels |
+| `taxonomy_lookup` table | Not present | Pre-seeded with 879 NUCC v25.0 codes |
+| Views | 3 views (no specialty labels) | 4 views — all expose `specialty`, `specialty_classification`, `specialty_grouping` ★ |
+| ERD diagram | 9 entities, static | 10 entities + 4 views, interactive taxonomy explorer with 879 searchable codes |
 
 ---
 
@@ -473,4 +526,4 @@ LIMIT 20;
 
 ---
 
-*Taxonomy: NUCC v25.0 (879 codes, included). Current release: v25.1 (7/1/2025). Schema: 2026-03-21.*
+*Taxonomy: NUCC v25.0 (879 codes, included). Current release: v25.1 (7/1/2025). Schema generated 2026-03-21.*
