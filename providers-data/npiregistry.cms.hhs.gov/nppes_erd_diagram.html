@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NPPES NPI Data Model – ERD</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #f5f4ef; color: #3d3d3a; }
+
+header { background: #0C447C; color: #fff; padding: 22px 36px 18px; display: flex; align-items: center; justify-content: space-between; }
+header h1 { font-size: 22px; font-weight: 700; }
+header p  { font-size: 12px; opacity: 0.7; margin-top: 3px; }
+.header-right { font-size: 11px; opacity: 0.65; text-align: right; }
+
+.toolbar { display: flex; align-items: center; gap: 12px; padding: 10px 36px; background: #fff; border-bottom: 1px solid #D3D1C7; flex-wrap: wrap; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; flex: 1; }
+.leg { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #5F5E5A; }
+.leg-dot { width: 12px; height: 12px; border-radius: 2px; border: 1px solid; flex-shrink: 0; }
+.dot-pk  { background: #E6F1FB; border-color: #185FA5; }
+.dot-fk  { background: #E1F5EE; border-color: #0F6E56; }
+.controls { display: flex; gap: 8px; }
+.btn { padding: 5px 12px; border: 1px solid #D3D1C7; border-radius: 5px; background: #fff; font-size: 11px; cursor: pointer; color: #3d3d3a; transition: background .15s; }
+.btn:hover { background: #E6F1FB; border-color: #185FA5; color: #0C447C; }
+
+.canvas-wrap { overflow: auto; background: #f5f4ef; }
+#canvas { position: relative; transform-origin: 0 0; }
+
+/* Entity card */
+.entity {
+  position: absolute;
+  background: #fff;
+  border-radius: 8px;
+  border: 1.5px solid #D3D1C7;
+  overflow: hidden;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.08);
+  transition: box-shadow .15s, border-color .15s;
+  cursor: move;
+  user-select: none;
+  min-width: 190px;
+}
+.entity:hover, .entity.active {
+  box-shadow: 0 4px 18px rgba(12,68,124,0.18);
+  border-color: #185FA5;
+  z-index: 20;
+}
+.entity-hdr {
+  padding: 7px 12px 5px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.entity-sub {
+  padding: 1px 12px 5px;
+  font-size: 9.5px;
+  opacity: 0.75;
+}
+.hdr-blue { background: #0C447C; color: #fff; }
+.sub-blue { background: #0C447C; color: #B5D4F4; border-bottom: 1px solid #185FA5; }
+.hdr-teal { background: #085041; color: #fff; }
+.sub-teal { background: #085041; color: #9FE1CB; border-bottom: 1px solid #0F6E56; }
+
+table.fields { width: 100%; border-collapse: collapse; }
+table.fields tr { border-bottom: 1px solid #F1EFE8; }
+table.fields tr:last-child { border-bottom: none; }
+table.fields tr:nth-child(odd)  { background: #fff; }
+table.fields tr:nth-child(even) { background: #F9F8F4; }
+table.fields td { padding: 3px 8px; font-size: 10.5px; white-space: nowrap; }
+.col-name { font-family: 'Courier New', monospace; font-size: 10px; color: #2c2c2a; }
+.col-type { font-family: 'Courier New', monospace; font-size: 9.5px; color: #888780; }
+.badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 8.5px; font-weight: 700; }
+.pk { background: #E6F1FB; color: #185FA5; border: 1px solid #B5D4F4; }
+.fk { background: #E1F5EE; color: #0F6E56; border: 1px solid #9FE1CB; }
+
+/* SVG lines */
+#lines-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+.rel-line { fill: none; stroke: #B4B2A9; stroke-width: 1.5; }
+.rel-line.hl { stroke: #185FA5; stroke-width: 2; }
+
+footer { text-align: center; padding: 14px; font-size: 11px; color: #888780; border-top: 1px solid #D3D1C7; background: #fff; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>NPPES NPI Data Model</h1>
+    <p>National Plan &amp; Provider Enumeration System</p>
+  </div>
+  <div class="header-right">9 entities &nbsp;|&nbsp; 4 source files<br>Date range: 2005-05-23 – 2026-03-08</div>
+</header>
+
+<div class="toolbar">
+  <div class="legend">
+    <div class="leg"><span class="leg-dot dot-pk"></span> Primary Key (PK)</div>
+    <div class="leg"><span class="leg-dot dot-fk"></span> Foreign Key (FK)</div>
+    <div class="leg" style="color:#0C447C;font-weight:700;">Blue</div><div class="leg" style="margin-left:-10px">= npidata_pfile</div>
+    <div class="leg" style="color:#085041;font-weight:700;">Green</div><div class="leg" style="margin-left:-10px">= pl / othername / endpoint files</div>
+    <div class="leg" style="color:#888780;font-style:italic;margin-left:6px">Drag entities to rearrange</div>
+  </div>
+  <div class="controls">
+    <button class="btn" onclick="zoom(1.15)">＋ Zoom in</button>
+    <button class="btn" onclick="zoom(0.87)">－ Zoom out</button>
+    <button class="btn" onclick="resetZoom()">Reset</button>
+  </div>
+</div>
+
+<div class="canvas-wrap" id="canvas-wrap">
+<div id="canvas" style="width:1200px;height:980px;">
+
+<svg id="lines-svg" width="1200" height="980"></svg>
+
+<!-- PROVIDER -->
+<div class="entity" id="e-provider" style="left:460px;top:30px;width:230px;">
+  <div class="entity-hdr hdr-blue">PROVIDER</div>
+  <div class="entity-sub sub-blue">npidata_pfile · hub entity</div>
+  <table class="fields">
+    <tr><td class="col-name">npi</td><td class="col-type">CHAR(10)</td><td><span class="badge pk">PK</span></td></tr>
+    <tr><td class="col-name">entity_type_code</td><td class="col-type">SMALLINT</td><td></td></tr>
+    <tr><td class="col-name">replacement_npi</td><td class="col-type">CHAR(10)</td><td></td></tr>
+    <tr><td class="col-name">ein</td><td class="col-type">VARCHAR(9)</td><td></td></tr>
+    <tr><td class="col-name">org_name</td><td class="col-type">VARCHAR(300)</td><td></td></tr>
+    <tr><td class="col-name">last_name</td><td class="col-type">VARCHAR(100)</td><td></td></tr>
+    <tr><td class="col-name">first_name</td><td class="col-type">VARCHAR(100)</td><td></td></tr>
+    <tr><td class="col-name">middle_name</td><td class="col-type">VARCHAR(100)</td><td></td></tr>
+    <tr><td class="col-name">credential</td><td class="col-type">VARCHAR(50)</td><td></td></tr>
+    <tr><td class="col-name">sex_code</td><td class="col-type">CHAR(1)</td><td></td></tr>
+    <tr><td class="col-name">enumeration_date</td><td class="col-type">DATE</td><td></td></tr>
+    <tr><td class="col-name">last_update_date</td><td class="col-type">DATE</td><td></td></tr>
+    <tr><td class="col-name">deactivation_date</td><td class="col-type">DATE</td><td></td></tr>
+    <tr><td class="col-name">reactivation_date</td><td class="col-type">DATE</td><td></td></tr>
+    <tr><td class="col-name">is_sole_proprietor</td><td class="col-type">CHAR(1)</td><td></td></tr>
+    <tr><td class="col-name">is_org_subpart</td><td class="col-type">CHAR(1)</td><td></td></tr>
+    <tr><td class="col-name">parent_org_lbn</td><td class="col-type">VARCHAR(300)</td><td></td></tr>
+    <tr><td class="col-name">parent_org_tin</td><td class="col-type">VARCHAR(9)</td><td></td></tr>
+    <tr><td class="col-name">certification_date</td><td class="col-type">DATE</td><td></td></tr>
+  </table>
+</div>
+
+<!-- MAILING_ADDRESS -->
+<div class="entity" id="e-mail" style="left:30px;top:30px;width:205px;">
+  <div class="entity-hdr hdr-teal">MAILING_ADDRESS</div>
+  <div class="entity-sub sub-teal">npidata_pfile · 1-to-1</div>
+  <table class="fields">
+    <tr><td class="col-name">npi</td><td class="col-type">CHAR(10)</td><td><span class="badge fk">FK</span></td></tr>
+    <tr><td class="col-name">address_line_1</td><td class="col-type">VARCHAR(200)</td><td></td></tr>
+    <tr><td class="col-name">address_line_2</td><td class="col-type">VARCHAR(200)</td><td></td></tr>
+    <tr><td class="col-name">city</td><td class="col-type">VARCHAR(200)</td><td></td></tr>
+    <tr><td class="col-name">state</td><td class="col-type">VARCHAR(40)</td><td></td></tr>
+    <tr><td class="col-name">postal_code</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+    <tr><td class="col-name">country_code</td><td class="col-type">CHAR(2)</td><td></td></tr>
+    <tr><td class="col-name">phone</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+    <tr><td class="col-name">fax</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+  </table>
+</div>
+
+<!-- PRACTICE_LOCATION -->
+<div class="entity" id="e-prac" style="left:30px;top:330px;width:205px;">
+  <div class="entity-hdr hdr-teal">PRACTICE_LOCATION</div>
+  <div class="entity-sub sub-teal">npidata_pfile · 1-to-1</div>
+  <table class="fields">
+    <tr><td class="col-name">npi</td><td class="col-type">CHAR(10)</td><td><span class="badge fk">FK</span></td></tr>
+    <tr><td class="col-name">address_line_1</td><td class="col-type">VARCHAR(200)</td><td></td></tr>
+    <tr><td class="col-name">address_line_2</td><td class="col-type">VARCHAR(200)</td><td></td></tr>
+    <tr><td class="col-name">city</td><td class="col-type">VARCHAR(200)</td><td></td></tr>
+    <tr><td class="col-name">state</td><td class="col-type">VARCHAR(40)</td><td></td></tr>
+    <tr><td class="col-name">postal_code</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+    <tr><td class="col-name">country_code</td><td class="col-type">CHAR(2)</td><td></td></tr>
+    <tr><td class="col-name">phone</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+    <tr><td class="col-name">fax</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+  </table>
+</div>
+
+<!-- SECONDARY_PRACTICE_LOCATION -->
+<div class="entity" id="e-sec" style="left:30px;top:630px;width:215px;">
+  <div class="entity-hdr hdr-teal">SECONDARY_LOCATION</div>
+  <div class="entity-sub sub-teal">pl_pfile · 1-to-many</div>
+  <table class="fields">
+    <tr><td class="col-name">id</td><td class="col-type">SERIAL</td><td><span class="badge pk">PK</span></td></tr>
+    <tr><td class="col-name">npi</td><td class="col-type">CHAR(10)</td><td><span class="badge fk">FK</span></td></tr>
+    <tr><td class="col-name">address_line_1</td><td class="col-type">VARCHAR(200)</td><td></td></tr>
+    <tr><td class="col-name">address_line_2</td><td class="col-type">VARCHAR(200)</td><td></td></tr>
+    <tr><td class="col-name">city</td><td class="col-type">VARCHAR(200)</td><td></td></tr>
+    <tr><td class="col-name">state</td><td class="col-type">VARCHAR(40)</td><td></td></tr>
+    <tr><td class="col-name">postal_code</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+    <tr><td class="col-name">country_code</td><td class="col-type">CHAR(2)</td><td></td></tr>
+    <tr><td class="col-name">phone</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+    <tr><td class="col-name">phone_ext</td><td class="col-type">VARCHAR(10)</td><td></td></tr>
+    <tr><td class="col-name">fax</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+  </table>
+</div>
+
+<!-- TAXONOMY -->
+<div class="entity" id="e-tax" style="left:750px;top:30px;width:210px;">
+  <div class="entity-hdr hdr-teal">TAXONOMY</div>
+  <div class="entity-sub sub-teal">npidata_pfile · 1-to-many (slots 1-15)</div>
+  <table class="fields">
+    <tr><td class="col-name">id</td><td class="col-type">SERIAL</td><td><span class="badge pk">PK</span></td></tr>
+    <tr><td class="col-name">npi</td><td class="col-type">CHAR(10)</td><td><span class="badge fk">FK</span></td></tr>
+    <tr><td class="col-name">slot</td><td class="col-type">SMALLINT</td><td></td></tr>
+    <tr><td class="col-name">taxonomy_code</td><td class="col-type">VARCHAR(10)</td><td></td></tr>
+    <tr><td class="col-name">license_number</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+    <tr><td class="col-name">license_state</td><td class="col-type">CHAR(2)</td><td></td></tr>
+    <tr><td class="col-name">primary_switch</td><td class="col-type">CHAR(1)</td><td></td></tr>
+    <tr><td class="col-name">taxonomy_group</td><td class="col-type">VARCHAR(10)</td><td></td></tr>
+  </table>
+</div>
+
+<!-- OTHER_IDENTIFIER -->
+<div class="entity" id="e-oid" style="left:750px;top:280px;width:210px;">
+  <div class="entity-hdr hdr-teal">OTHER_IDENTIFIER</div>
+  <div class="entity-sub sub-teal">npidata_pfile · 1-to-many (slots 1-50)</div>
+  <table class="fields">
+    <tr><td class="col-name">id</td><td class="col-type">SERIAL</td><td><span class="badge pk">PK</span></td></tr>
+    <tr><td class="col-name">npi</td><td class="col-type">CHAR(10)</td><td><span class="badge fk">FK</span></td></tr>
+    <tr><td class="col-name">slot</td><td class="col-type">SMALLINT</td><td></td></tr>
+    <tr><td class="col-name">identifier</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+    <tr><td class="col-name">type_code</td><td class="col-type">VARCHAR(10)</td><td></td></tr>
+    <tr><td class="col-name">state</td><td class="col-type">CHAR(2)</td><td></td></tr>
+    <tr><td class="col-name">issuer</td><td class="col-type">VARCHAR(80)</td><td></td></tr>
+  </table>
+</div>
+
+<!-- OTHER_NAME -->
+<div class="entity" id="e-oname" style="left:750px;top:490px;width:210px;">
+  <div class="entity-hdr hdr-teal">OTHER_NAME</div>
+  <div class="entity-sub sub-teal">othername_pfile · 1-to-many</div>
+  <table class="fields">
+    <tr><td class="col-name">id</td><td class="col-type">SERIAL</td><td><span class="badge pk">PK</span></td></tr>
+    <tr><td class="col-name">npi</td><td class="col-type">CHAR(10)</td><td><span class="badge fk">FK</span></td></tr>
+    <tr><td class="col-name">other_org_name</td><td class="col-type">VARCHAR(300)</td><td></td></tr>
+    <tr><td class="col-name">name_type_code</td><td class="col-type">VARCHAR(10)</td><td></td></tr>
+  </table>
+</div>
+
+<!-- AUTHORIZED_OFFICIAL -->
+<div class="entity" id="e-auth" style="left:430px;top:720px;width:225px;">
+  <div class="entity-hdr hdr-teal">AUTHORIZED_OFFICIAL</div>
+  <div class="entity-sub sub-teal">npidata_pfile · 1-to-0-or-1 (org only)</div>
+  <table class="fields">
+    <tr><td class="col-name">npi</td><td class="col-type">CHAR(10)</td><td><span class="badge fk">FK</span></td></tr>
+    <tr><td class="col-name">last_name</td><td class="col-type">VARCHAR(100)</td><td></td></tr>
+    <tr><td class="col-name">first_name</td><td class="col-type">VARCHAR(100)</td><td></td></tr>
+    <tr><td class="col-name">middle_name</td><td class="col-type">VARCHAR(100)</td><td></td></tr>
+    <tr><td class="col-name">title_or_position</td><td class="col-type">VARCHAR(200)</td><td></td></tr>
+    <tr><td class="col-name">phone</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+    <tr><td class="col-name">name_prefix</td><td class="col-type">VARCHAR(10)</td><td></td></tr>
+    <tr><td class="col-name">credential</td><td class="col-type">VARCHAR(50)</td><td></td></tr>
+  </table>
+</div>
+
+<!-- ENDPOINT -->
+<div class="entity" id="e-ep" style="left:750px;top:680px;width:215px;">
+  <div class="entity-hdr hdr-teal">ENDPOINT</div>
+  <div class="entity-sub sub-teal">endpoint_pfile · 1-to-many</div>
+  <table class="fields">
+    <tr><td class="col-name">id</td><td class="col-type">SERIAL</td><td><span class="badge pk">PK</span></td></tr>
+    <tr><td class="col-name">npi</td><td class="col-type">CHAR(10)</td><td><span class="badge fk">FK</span></td></tr>
+    <tr><td class="col-name">endpoint_type</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+    <tr><td class="col-name">endpoint_type_desc</td><td class="col-type">VARCHAR(200)</td><td></td></tr>
+    <tr><td class="col-name">endpoint</td><td class="col-type">VARCHAR(1000)</td><td></td></tr>
+    <tr><td class="col-name">affiliation</td><td class="col-type">VARCHAR(10)</td><td></td></tr>
+    <tr><td class="col-name">affiliation_lbn</td><td class="col-type">VARCHAR(300)</td><td></td></tr>
+    <tr><td class="col-name">use_code</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+    <tr><td class="col-name">content_type</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+    <tr><td class="col-name">affiliation_city</td><td class="col-type">VARCHAR(200)</td><td></td></tr>
+    <tr><td class="col-name">affiliation_state</td><td class="col-type">VARCHAR(40)</td><td></td></tr>
+    <tr><td class="col-name">affiliation_postal</td><td class="col-type">VARCHAR(20)</td><td></td></tr>
+  </table>
+</div>
+
+</div><!-- end canvas -->
+</div><!-- end canvas-wrap -->
+
+<footer>NPPES NPI Data Model &nbsp;|&nbsp; 9 entities &nbsp;|&nbsp; Generated 2026-03-20</footer>
+
+<script>
+var scale = 1;
+
+function zoom(factor) {
+  scale = Math.min(2, Math.max(0.4, scale * factor));
+  document.getElementById('canvas').style.transform = 'scale(' + scale + ')';
+  var c = document.getElementById('canvas');
+  document.getElementById('canvas-wrap').style.height = (c.offsetHeight * scale + 80) + 'px';
+  drawLines();
+}
+
+function resetZoom() {
+  scale = 1;
+  document.getElementById('canvas').style.transform = 'scale(1)';
+  document.getElementById('canvas-wrap').style.height = '';
+  drawLines();
+}
+
+// Relationship definitions: [fromId, toId, cardinality label]
+var RELS = [
+  ['e-provider', 'e-mail',   '1 : 1'],
+  ['e-provider', 'e-prac',   '1 : 1'],
+  ['e-provider', 'e-sec',    '1 : 0..*'],
+  ['e-provider', 'e-tax',    '1 : 1..*'],
+  ['e-provider', 'e-oid',    '1 : 0..*'],
+  ['e-provider', 'e-oname',  '1 : 0..*'],
+  ['e-provider', 'e-auth',   '1 : 0..1'],
+  ['e-provider', 'e-ep',     '1 : 0..*'],
+];
+
+function getCenter(el) {
+  return {
+    x: el.offsetLeft + el.offsetWidth / 2,
+    y: el.offsetTop  + el.offsetHeight / 2,
+    left:   el.offsetLeft,
+    right:  el.offsetLeft + el.offsetWidth,
+    top:    el.offsetTop,
+    bottom: el.offsetTop  + el.offsetHeight,
+  };
+}
+
+function getEdgePoint(from, to) {
+  // Return the closest edge midpoint of 'from' box facing 'to' box center
+  var fc = getCenter(from);
+  var tc = getCenter(to);
+  var dx = tc.x - fc.x;
+  var dy = tc.y - fc.y;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    return dx > 0
+      ? { x: fc.right,  y: fc.y }
+      : { x: fc.left,   y: fc.y };
+  } else {
+    return dy > 0
+      ? { x: fc.x, y: fc.bottom }
+      : { x: fc.x, y: fc.top   };
+  }
+}
+
+function drawLines() {
+  var svg = document.getElementById('lines-svg');
+  var canvas = document.getElementById('canvas');
+  svg.setAttribute('width',  canvas.offsetWidth);
+  svg.setAttribute('height', canvas.offsetHeight);
+  svg.innerHTML = '<defs>' +
+    '<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">' +
+    '<path d="M1 1L9 5L1 9" fill="none" stroke="#B4B2A9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>' +
+    '<marker id="dot" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="6" markerHeight="6">' +
+    '<circle cx="4" cy="4" r="3" fill="#B4B2A9"/></marker>' +
+    '</defs>';
+
+  RELS.forEach(function(r) {
+    var fromEl = document.getElementById(r[0]);
+    var toEl   = document.getElementById(r[1]);
+    if (!fromEl || !toEl) return;
+
+    var p1 = getEdgePoint(fromEl, toEl);
+    var p2 = getEdgePoint(toEl, fromEl);
+
+    var midX = (p1.x + p2.x) / 2;
+    var midY = (p1.y + p2.y) / 2;
+
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    var d;
+    if (Math.abs(p1.x - p2.x) > Math.abs(p1.y - p2.y)) {
+      d = 'M' + p1.x + ',' + p1.y + ' C' + midX + ',' + p1.y + ' ' + midX + ',' + p2.y + ' ' + p2.x + ',' + p2.y;
+    } else {
+      d = 'M' + p1.x + ',' + p1.y + ' C' + p1.x + ',' + midY + ' ' + p2.x + ',' + midY + ' ' + p2.x + ',' + p2.y;
+    }
+    path.setAttribute('d', d);
+    path.setAttribute('class', 'rel-line');
+    path.setAttribute('marker-start', 'url(#dot)');
+    path.setAttribute('marker-end',   'url(#arr)');
+    path.setAttribute('data-from', r[0]);
+    path.setAttribute('data-to',   r[1]);
+    svg.appendChild(path);
+
+    // Cardinality label
+    var text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', midX);
+    text.setAttribute('y', midY - 4);
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('font-size', '9');
+    text.setAttribute('font-family', 'Arial');
+    text.setAttribute('fill', '#888780');
+    text.textContent = r[2];
+    svg.appendChild(text);
+  });
+}
+
+// Drag logic
+var dragging = null, dragOffX = 0, dragOffY = 0;
+
+document.querySelectorAll('.entity').forEach(function(el) {
+  el.addEventListener('mousedown', function(e) {
+    dragging = el;
+    dragOffX = e.clientX - el.offsetLeft;
+    dragOffY = e.clientY - el.offsetTop;
+    el.classList.add('active');
+    e.preventDefault();
+  });
+});
+
+document.addEventListener('mousemove', function(e) {
+  if (!dragging) return;
+  var canvas = document.getElementById('canvas');
+  var rect = canvas.getBoundingClientRect();
+  var newX = (e.clientX - rect.left) / scale - dragOffX + dragging.offsetLeft - (e.clientX - rect.left - (e.clientX - rect.left)) ;
+  // Simpler: just use raw offset
+  newX = e.clientX / scale - dragOffX / scale - rect.left / scale;
+  var newY = e.clientY / scale - dragOffY / scale - rect.top / scale;
+  newX = Math.max(0, Math.min(canvas.offsetWidth  - dragging.offsetWidth,  newX));
+  newY = Math.max(0, Math.min(canvas.offsetHeight - dragging.offsetHeight, newY));
+  dragging.style.left = newX + 'px';
+  dragging.style.top  = newY + 'px';
+  drawLines();
+});
+
+document.addEventListener('mouseup', function() {
+  if (dragging) {
+    dragging.classList.remove('active');
+    dragging = null;
+  }
+});
+
+// Highlight related lines on hover
+document.querySelectorAll('.entity').forEach(function(el) {
+  el.addEventListener('mouseenter', function() {
+    var id = el.id;
+    document.querySelectorAll('.rel-line').forEach(function(line) {
+      if (line.dataset.from === id || line.dataset.to === id) {
+        line.classList.add('hl');
+        line.style.stroke = '#185FA5';
+      } else {
+        line.style.opacity = '0.3';
+      }
+    });
+  });
+  el.addEventListener('mouseleave', function() {
+    document.querySelectorAll('.rel-line').forEach(function(line) {
+      line.classList.remove('hl');
+      line.style.stroke = '';
+      line.style.opacity = '';
+    });
+  });
+});
+
+window.addEventListener('load', drawLines);
+window.addEventListener('resize', drawLines);
+</script>
+</body>
+</html>
